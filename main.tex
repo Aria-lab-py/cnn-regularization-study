@@ -1,0 +1,138 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{geometry}
+\usepackage{booktabs}
+\geometry{margin=1in}
+
+\title{Improving CNN Generalization with Data Augmentation and Label Smoothing}
+\author{Aria Ahmadi}
+\date{June~2025}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Convolutional Neural Networks (CNNs) have achieved remarkable success in image classification, yet \emph{overfitting} remains a central challenge---particularly when data are scarce and model capacity is high. This paper investigates two complementary regularization strategies: \textbf{(i)} aggressive data augmentation and \textbf{(ii)} label smoothing. Experiments on the 10-class CIFAR-10 dataset show that a lightweight CNN attains \textbf{84.55\%} validation accuracy in the baseline setting. Applying augmentation or label smoothing independently lifts performance to \textbf{85.89\%} and \textbf{85.62\%}, respectively, while their \emph{combination} yields \textbf{88.44\%}. These findings confirm that even simple architectures benefit substantially from carefully selected regularizers.
+\end{abstract}
+
+\section{Introduction}
+CNNs underpin a wide range of modern vision systems---from mobile apps to autonomous vehicles. However, their millions of parameters can easily memorize training samples, harming generalization on unseen data. Standard defenses such as dropout and batch normalization help, but in practice must be complemented with additional techniques.
+
+This study evaluates the effectiveness of \emph{data augmentation} and \emph{label smoothing}---two broadly adopted strategies that inject prior knowledge and discourage overconfident predictions. We assess each technique in isolation and in tandem using a purposely compact CNN trained on CIFAR-10.
+
+\section{Related Work}
+Data augmentation has long been recognized as a simple yet powerful means of increasing effective dataset size. Automated policies---\textit{AutoAugment} and \textit{RandAugment}---search for optimal transformations to maximize validation performance. Alternative schemes such as \textit{Mixup}\cite{mixup2018} and \textit{CutMix}\cite{yun2019cutmix} blend images or patches to create harder training examples.
+
+\textbf{Label smoothing} was introduced by Szegedy \textit{et al.}\cite{szegedy2016} to prevent classifiers from becoming overconfident; subsequent work shows it also improves calibration and robustness. Our contribution is a concise ablation showing how these two approaches interact in a high school-level research setting.
+
+\section{Methodology}
+\subsection{Dataset and Preprocessing}
+We use the standard CIFAR-10 benchmark containing 60,000 color images of size $32\times32$ pixels. Following common practice, we reserve 80\% for training and 20\% for validation. Input pixels are normalized to $[-1,1]$. During training we apply random horizontal flips and rotations of up to $\pm15^\circ$.
+
+\subsection{Model Architecture}
+Our \texttt{SimpleCNN} comprises two convolutional blocks followed by a fully connected (FC) classifier. Each conv block contains two $3\times3$ convolutions, batch normalization, ReLU activations, $2\times2$ max pooling, and 25\% dropout. The FC block flattens the feature map, applies a 256-unit dense layer with ReLU and 50\% dropout, and finally a 10-way linear classifier.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.2\linewidth]{results/model_architecture_placeholder.pdf}
+  \caption{High-level diagram of the \texttt{SimpleCNN} used in this study.}
+  \label{fig:arch}
+\end{figure}
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    \textbf{Layer} & \textbf{Type} & \textbf{Output Shape} & \textbf{Params} \\
+    \midrule
+    Input & -- & $32\times32\times3$ & -- \\
+    Conv1 & $3\times3$ @64 & $32\times32\times64$ & 1.8k \\
+    Conv2 & $3\times3$ @64 & $32\times32\times64$ & 36.9k \\
+    MaxPool & $2\times2$ & $16\times16\times64$ & 0 \\
+    Conv3 & $3\times3$ @128 & $16\times16\times128$ & 73.9k \\
+    Conv4 & $3\times3$ @128 & $16\times16\times128$ & 147.6k \\
+    MaxPool & $2\times2$ & $8\times8\times128$ & 0 \\
+    Flatten & -- & 8192 & 0 \\
+    FC1 & 256 & 256 & 2.1M \\
+    FC2 & 10 & 10 & 2.6k \\
+    \bottomrule
+  \end{tabular}
+  \caption{Detailed architecture and parameter counts for \texttt{SimpleCNN}.}
+  \label{tab:layers}
+\end{table}
+
+\subsection{Training Procedure}
+All variants are trained for 100 epochs with the Adam optimizer (learning rate $1\times10^{-4}$). Label smoothing uses $\epsilon = 0.1$. We evaluate four settings:
+\begin{enumerate}
+  \item \textbf{Baseline}: standard cross-entropy, no augmentation.
+  \item \textbf{Data Aug Only}: horizontal flips + rotations, cross-entropy.
+  \item \textbf{Label Smoothing Only}: label-smoothed loss, no augmentation.
+  \item \textbf{Aug + LS}: both techniques combined.
+\end{enumerate}
+
+\section{Results and Analysis}
+\subsection{Ablation Study}
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Experiment} & \textbf{Augment?} & \textbf{Label Smooth?} & \textbf{Val Acc.} \\
+\midrule
+Baseline & \texttimes & \texttimes & 84.55\% \\
+Data Aug Only & \checkmark & \texttimes & 85.89\% \\
+Label Smoothing Only & \texttimes & \checkmark & 85.62\% \\
+Aug + LS & \checkmark & \checkmark & \textbf{88.44\%} \\
+\bottomrule
+\end{tabular}
+\caption{Validation accuracy for each training configuration.}
+\label{tab:ablation}
+\end{table}
+
+\subsection{Training and Validation Curves}
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.95\linewidth]{results/combined_training_curves.jpg}
+  \caption{Training (solid) and validation (dashed) curves. Combined Aug+LS exhibits the smallest generalization gap.}
+  \label{fig:all_curves}
+\end{figure}
+
+\subsection{t-SNE Feature Visualization}
+\begin{figure}[h]
+  \centering
+  \begin{subfigure}{0.32\linewidth}
+    \includegraphics[width=\linewidth]{results/data_aug_only/tsne_after_training_aug_only.png}
+    \caption{Data Aug Only}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.32\linewidth}
+    \includegraphics[width=\linewidth]{results/label_smoothing_only/tsne_after_training_ls_only.png}
+    \caption{Label Smoothing Only}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.32\linewidth}
+    \includegraphics[width=\linewidth]{results/aug_ls/tsne_after_training_aug_ls.png}
+    \caption{Aug + Label Smoothing}
+  \end{subfigure}
+  \caption{t-SNE embeddings of extracted features.}
+  \label{fig:tsne}
+\end{figure}
+
+\section{Conclusion}
+Aggressive data augmentation and label smoothing each mitigate overfitting in isolation, but their combination yields the highest performance (+3.74 pp) on CIFAR-10 using a compact CNN. The qualitative t-SNE analysis supports these gains. Future work will explore more advanced policies (e.g., Mixup, CutMix) and deeper backbones.
+
+\begin{thebibliography}{9}
+\bibitem{szegedy2016} Christian Szegedy, Vincent Vanhoucke, Sergey Ioffe, Jon Shlens, and Zbigniew Wojna. \textit{Rethinking the Inception Architecture for Computer Vision}. In CVPR, 2016.
+
+\bibitem{krizhevsky2009} Alex Krizhevsky and Geoffrey Hinton. \textit{Learning Multiple Layers of Features from Tiny Images}. Technical Report, University of Toronto, 2009.
+
+\bibitem{mixup2018} Hongyi Zhang, Moustapha Cisse, Yann Dauphin, and David Lopez-Paz. \textit{mixup: Beyond Empirical Risk Minimization}. In ICLR, 2018.
+
+\bibitem{yun2019cutmix} Sangdoo Yun, Dongyoon Han, Seong Joon Oh, Sanghyuk Chun, Junsuk Choe, and Youngjoon Yoo. \textit{CutMix: Regularization Strategy to Train Strong Classifiers With Localizable Features}. In ICCV, 2019.
+\end{thebibliography}
+
+\end{document}
